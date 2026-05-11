@@ -50,6 +50,44 @@ Run one Express process that serves both the SPA and API:
 NODE_ENV=production HOST=0.0.0.0 PORT=4174 npm start
 ```
 
+## Docker Development Check
+
+Build the Docker image locally:
+
+```bash
+docker build -t goals-tracker:latest .
+```
+
+Run the container with Docker Compose:
+
+```bash
+docker compose up -d --build
+```
+
+Open:
+
+```text
+http://127.0.0.1:4174
+```
+
+Check the API:
+
+```text
+http://127.0.0.1:4174/api/health
+```
+
+Expected response:
+
+```json
+{ "ok": true }
+```
+
+Stop the container:
+
+```bash
+docker compose down
+```
+
 ## Important Concepts
 
 ### Roles

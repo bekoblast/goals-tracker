@@ -58,6 +58,14 @@ In production, Express serves both the compiled SPA and `/api` from one port.
 
 ## Docker
 
+### Build The Image
+
+```bash
+docker build -t goals-tracker:latest .
+```
+
+### Run With Docker Compose
+
 ```bash
 docker compose up -d --build
 ```
@@ -65,10 +73,37 @@ docker compose up -d --build
 Open:
 
 ```text
-http://SERVER_IP:4174
+http://127.0.0.1:4174
 ```
 
+On a VPS, replace `127.0.0.1` with the server IP or domain.
+
 The `docker-compose.yml` file mounts `./data` to `/app/data`, so app data survives rebuilds and restarts.
+
+### Verify The Container
+
+```bash
+docker compose ps
+docker compose logs -f
+```
+
+Health endpoint:
+
+```text
+http://127.0.0.1:4174/api/health
+```
+
+Expected response:
+
+```json
+{ "ok": true }
+```
+
+### Stop The Container
+
+```bash
+docker compose down
+```
 
 ## Documentation
 
