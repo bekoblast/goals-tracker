@@ -12,6 +12,9 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=4174
+LABEL org.opencontainers.image.title="Team Goals Tracker"
+LABEL org.opencontainers.image.description="Arabic RTL team goals tracker with roles, activities, notifications, backups, and Docker deployment."
+LABEL org.opencontainers.image.source="https://github.com/bekoblast/goals-tracker"
 
 COPY package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force

@@ -110,6 +110,7 @@ docker compose down
 - [Developer Guide](docs/DEVELOPER_GUIDE.md)
 - [API Reference](docs/API_REFERENCE.md)
 - [Deployment Guide](docs/DEPLOYMENT.md)
+- [Docker Hub Guide](docs/DOCKER_HUB.md)
 - [Portfolio Case Study](docs/PORTFOLIO_CASE_STUDY.md)
 
 ## Scripts
