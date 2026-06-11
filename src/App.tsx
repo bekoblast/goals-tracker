@@ -82,6 +82,21 @@ type IqamaRecord = {
   expiryDate: string
   notes: string
   updatedAt: string
+  renewalHistory: IqamaRenewal[]
+  alertedThresholds: number[]
+}
+
+type IqamaRenewal = {
+  id: number
+  previousExpiryDate: string
+  newExpiryDate: string
+  note: string
+  author: string
+  date: string
+}
+
+type AppSettings = {
+  iqamaAlertDays: number[]
 }
 
 type AppData = {
@@ -90,6 +105,7 @@ type AppData = {
   iqamaRecords: IqamaRecord[]
   auditLog: AuditEntry[]
   notifications: NotificationItem[]
+  settings: AppSettings
 }
 
 type LoginResponse = {
@@ -123,6 +139,10 @@ const emptyIqama = {
   issueDate: '',
   expiryDate: '',
   notes: '',
+}
+
+const defaultSettings: AppSettings = {
+  iqamaAlertDays: [90, 60, 30, 7],
 }
 
 const statusLabels: Record<GoalStatus, string> = {
@@ -191,6 +211,7 @@ function App() {
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([])
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
   const [iqamaRecords, setIqamaRecords] = useState<IqamaRecord[]>([])
+  const [settings, setSettings] = useState<AppSettings>(defaultSettings)
   const [selectedGoalId, setSelectedGoalId] = useState(0)
   const [ownerFilter, setOwnerFilter] = useState('الكل')
   const [statusFilter, setStatusFilter] = useState('الكل')
@@ -237,6 +258,7 @@ function App() {
       setAuditLog(data.auditLog ?? [])
       setNotifications(data.notifications ?? [])
       setIqamaRecords(data.iqamaRecords ?? [])
+      setSettings(data.settings ?? defaultSettings)
       setSelectedGoalId(data.goals[0]?.id ?? 0)
       setGoalDraft((current) => ({ ...current, owner: current.owner || firstEmployee }))
     } catch (error) {
@@ -469,6 +491,7 @@ function App() {
       setAuditLog(data.auditLog ?? [])
       setNotifications(data.notifications ?? [])
       setIqamaRecords(data.iqamaRecords ?? [])
+      setSettings(data.settings ?? defaultSettings)
       setSelectedGoalId(data.goals[0]?.id ?? 0)
       event.target.value = ''
     } catch {
@@ -672,6 +695,7 @@ function App() {
       setAuditLog(data.auditLog ?? [])
       setNotifications(data.notifications ?? [])
       setIqamaRecords(data.iqamaRecords ?? [])
+      setSettings(data.settings ?? defaultSettings)
       setSelectedGoalId(data.goals[0]?.id ?? 0)
     } catch {
       setError('تعذر إعادة بيانات التجربة.')
@@ -701,6 +725,22 @@ function App() {
   const deleteIqama = async (recordId: number) => {
     await api(`/api/iqama/${recordId}`, { method: 'DELETE' }, sessionToken)
     setIqamaRecords((current) => current.filter((item) => item.id !== recordId))
+  }
+
+  const renewIqama = async (recordId: number, newExpiryDate: string, note: string) => {
+    const record = await api<IqamaRecord>(`/api/iqama/${recordId}/renewals`, {
+      method: 'POST',
+      body: JSON.stringify({ newExpiryDate, note }),
+    }, sessionToken)
+    setIqamaRecords((current) => current.map((item) => (item.id === record.id ? record : item)))
+  }
+
+  const updateIqamaAlertDays = async (iqamaAlertDays: number[]) => {
+    const nextSettings = await api<AppSettings>('/api/settings/iqama-alerts', {
+      method: 'PATCH',
+      body: JSON.stringify({ iqamaAlertDays }),
+    }, sessionToken)
+    setSettings(nextSettings)
   }
 
   if (!currentUser) {
@@ -835,9 +875,13 @@ function App() {
         />
       ) : activeModule === 'iqama' ? (
         <IqamaWorkspace
+          alertDays={settings.iqamaAlertDays}
+          canManageSettings={canManageUsers}
           employees={employees}
           onCreate={createIqama}
           onDelete={deleteIqama}
+          onRenew={renewIqama}
+          onUpdateAlertDays={updateIqamaAlertDays}
           onUpdate={updateIqama}
           records={iqamaRecords}
         />
@@ -1605,15 +1649,23 @@ function GeneralDashboard({
 }
 
 function IqamaWorkspace({
+  alertDays,
+  canManageSettings,
   employees,
   onCreate,
   onDelete,
+  onRenew,
+  onUpdateAlertDays,
   onUpdate,
   records,
 }: {
+  alertDays: number[]
+  canManageSettings: boolean
   employees: Employee[]
   onCreate: (draft: typeof emptyIqama) => Promise<void>
   onDelete: (recordId: number) => Promise<void>
+  onRenew: (recordId: number, newExpiryDate: string, note: string) => Promise<void>
+  onUpdateAlertDays: (alertDays: number[]) => Promise<void>
   onUpdate: (recordId: number, draft: typeof emptyIqama) => Promise<void>
   records: IqamaRecord[]
 }) {
@@ -1622,6 +1674,10 @@ function IqamaWorkspace({
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('all')
   const [formError, setFormError] = useState('')
+  const [renewingId, setRenewingId] = useState<number | null>(null)
+  const [renewalDate, setRenewalDate] = useState('')
+  const [renewalNote, setRenewalNote] = useState('')
+  const [alertDaysDraft, setAlertDaysDraft] = useState(alertDays.join(', '))
   const employeeById = new Map(employees.map((employee) => [employee.id, employee]))
   const eligibleEmployees = employees.filter((employee) => employee.role === 'employee' && employee.active)
   const metrics = {
@@ -1665,6 +1721,31 @@ function IqamaWorkspace({
       expiryDate: record.expiryDate,
       notes: record.notes,
     })
+  }
+
+  const submitRenewal = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!renewingId || !renewalDate) return
+    setFormError('')
+    try {
+      await onRenew(renewingId, renewalDate, renewalNote)
+      setRenewingId(null)
+      setRenewalDate('')
+      setRenewalNote('')
+    } catch {
+      setFormError('تعذر تسجيل التجديد. تأكد من تاريخ الانتهاء الجديد.')
+    }
+  }
+
+  const saveAlertDays = async (event: FormEvent) => {
+    event.preventDefault()
+    const days = alertDaysDraft.split(',').map((value) => Number(value.trim())).filter(Number.isFinite)
+    setFormError('')
+    try {
+      await onUpdateAlertDays(days)
+    } catch {
+      setFormError('تعذر حفظ إعدادات التنبيه. أدخل أياما صحيحة مفصولة بفواصل.')
+    }
   }
 
   return (
@@ -1722,9 +1803,35 @@ function IqamaWorkspace({
                     <small>{formatDate(record.expiryDate)}</small>
                   </div>
                   <div className="row-actions">
+                    <button
+                      className="icon-button renewal-button"
+                      onClick={() => {
+                        setRenewingId(record.id)
+                        setRenewalDate('')
+                        setRenewalNote('')
+                      }}
+                      type="button"
+                      aria-label="تسجيل تجديد الإقامة"
+                    >
+                      <RefreshCw size={17} />
+                    </button>
                     <button className="icon-button" onClick={() => edit(record)} type="button" aria-label="تعديل سجل الإقامة"><Pencil size={17} /></button>
                     <button className="icon-button danger" onClick={() => void onDelete(record.id)} type="button" aria-label="حذف سجل الإقامة"><Trash2 size={17} /></button>
                   </div>
+                  {record.renewalHistory.length > 0 && (
+                    <details className="iqama-renewal-history">
+                      <summary>سجل التجديدات ({record.renewalHistory.length})</summary>
+                      <div>
+                        {record.renewalHistory.map((renewal) => (
+                          <article key={renewal.id}>
+                            <strong>{formatDate(renewal.previousExpiryDate)} ← {formatDate(renewal.newExpiryDate)}</strong>
+                            <span>{renewal.author} · {formatDateTime(renewal.date)}</span>
+                            {renewal.note && <p>{renewal.note}</p>}
+                          </article>
+                        ))}
+                      </div>
+                    </details>
+                  )}
                 </article>
               )
             })}
@@ -1779,6 +1886,56 @@ function IqamaWorkspace({
             </div>
           </form>
         </section>
+
+        {renewingId && (
+          <section className="panel iqama-renewal-panel">
+            <div className="panel-title">
+              <div>
+                <h2>تسجيل تجديد الإقامة</h2>
+                <p>يحفظ النظام تاريخ الانتهاء السابق والجديد في سجل التجديدات.</p>
+              </div>
+              <RefreshCw size={22} />
+            </div>
+            <form className="goal-form" onSubmit={(event) => void submitRenewal(event)}>
+              <label>
+                تاريخ الانتهاء الجديد
+                <input required type="date" value={renewalDate} onChange={(event) => setRenewalDate(event.target.value)} />
+              </label>
+              <label className="wide-field">
+                ملاحظات التجديد
+                <textarea rows={3} value={renewalNote} onChange={(event) => setRenewalNote(event.target.value)} />
+              </label>
+              <div className="form-actions wide-field">
+                <button type="submit">تسجيل التجديد</button>
+                <button className="secondary-form-button" onClick={() => setRenewingId(null)} type="button">إلغاء</button>
+              </div>
+            </form>
+          </section>
+        )}
+
+        {canManageSettings && (
+          <section className="panel iqama-settings-panel">
+            <div className="panel-title">
+              <div>
+                <h2>إعدادات تنبيهات الإقامة</h2>
+                <p>حدد الأيام التي يرسل عندها النظام تنبيهات اقتراب الانتهاء.</p>
+              </div>
+              <Bell size={22} />
+            </div>
+            <form className="settings-form" onSubmit={(event) => void saveAlertDays(event)}>
+              <label>
+                أيام التنبيه
+                <input
+                  onChange={(event) => setAlertDaysDraft(event.target.value)}
+                  placeholder="90, 60, 30, 7"
+                  value={alertDaysDraft}
+                />
+              </label>
+              <button type="submit">حفظ الإعدادات</button>
+            </form>
+            <p className="empty-state">الإعداد الحالي: {alertDays.join('، ')} يوم.</p>
+          </section>
+        )}
       </section>
     </section>
   )
@@ -1983,6 +2140,8 @@ function auditLabel(action: string) {
     create_iqama: 'إضافة سجل إقامة',
     update_iqama: 'تحديث سجل إقامة',
     delete_iqama: 'حذف سجل إقامة',
+    renew_iqama: 'تسجيل تجديد إقامة',
+    update_iqama_alerts: 'تحديث تنبيهات الإقامة',
   }[action] ?? action
 }
 

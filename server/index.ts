@@ -58,6 +58,7 @@ app.get('/api/bootstrap', async (request, response) => {
     employees: data.employees.map(publicEmployee),
     goals: canManageGoals(user) ? data.goals : data.goals.filter((goal) => goal.owner === user.name),
     iqamaRecords: canManageIqama(user) ? data.iqamaRecords : [],
+    settings: data.settings,
     auditLog: user.role === 'super_admin' ? data.auditLog.slice(0, 80) : [],
     notifications: getUserNotifications(data, user),
     user: publicEmployee(user),
@@ -379,6 +380,7 @@ app.patch('/api/iqama/:id', async (request, response) => {
     return
   }
 
+  const previousExpiryDate = record.expiryDate
   Object.assign(record, {
     iqamaNumber: request.body.iqamaNumber === undefined ? record.iqamaNumber : String(request.body.iqamaNumber).trim(),
     nationality: request.body.nationality === undefined ? record.nationality : String(request.body.nationality).trim(),
@@ -388,9 +390,52 @@ app.patch('/api/iqama/:id', async (request, response) => {
     notes: request.body.notes === undefined ? record.notes : String(request.body.notes).trim(),
     updatedAt: new Date().toISOString(),
   })
+  if (record.expiryDate !== previousExpiryDate) record.alertedThresholds = []
 
   const employee = data.employees.find((item) => item.id === record.employeeId)
   addAudit(data, user, 'update_iqama', employee?.name ?? record.iqamaNumber)
+  notifyIqamaStatus(data, record, employee?.name ?? record.iqamaNumber, user.id)
+  await writeData(data)
+  response.json(record)
+})
+
+app.post('/api/iqama/:id/renewals', async (request, response) => {
+  const data = await readData()
+  const user = requireUser(request, response, data)
+  if (!user || !requireIqamaManager(user, response)) return
+
+  const record = data.iqamaRecords.find((item) => item.id === Number(request.params.id))
+  if (!record) {
+    response.status(404).json({ message: 'Iqama record was not found.' })
+    return
+  }
+
+  const newExpiryDate = String(request.body.newExpiryDate ?? '')
+  const note = String(request.body.note ?? '').trim()
+  if (!newExpiryDate) {
+    response.status(400).json({ message: 'New expiry date is required.' })
+    return
+  }
+
+  record.renewalHistory = [
+    {
+      id: Date.now(),
+      previousExpiryDate: record.expiryDate,
+      newExpiryDate,
+      note,
+      author: user.name,
+      date: new Date().toISOString(),
+    },
+    ...record.renewalHistory,
+  ]
+  record.expiryDate = newExpiryDate
+  record.notes = note || record.notes
+  record.alertedThresholds = []
+  record.updatedAt = new Date().toISOString()
+
+  const employee = data.employees.find((item) => item.id === record.employeeId)
+  addAudit(data, user, 'renew_iqama', employee?.name ?? record.iqamaNumber)
+  notifyManagers(data, 'تم تجديد إقامة', `تم تحديث تاريخ انتهاء إقامة ${employee?.name ?? record.iqamaNumber}.`, 'iqama', user.id)
   notifyIqamaStatus(data, record, employee?.name ?? record.iqamaNumber, user.id)
   await writeData(data)
   response.json(record)
@@ -412,6 +457,25 @@ app.delete('/api/iqama/:id', async (request, response) => {
   addAudit(data, user, 'delete_iqama', employee?.name ?? record.iqamaNumber)
   await writeData(data)
   response.status(204).send()
+})
+
+app.patch('/api/settings/iqama-alerts', async (request, response) => {
+  const data = await readData()
+  const user = requireUser(request, response, data)
+  if (!user || !requireSuperAdmin(user, response)) return
+
+  const values = Array.isArray(request.body.iqamaAlertDays) ? request.body.iqamaAlertDays : []
+  const iqamaAlertDays = [...new Set(values.map(Number).filter((value) => Number.isInteger(value) && value > 0 && value <= 365))]
+    .sort((a, b) => b - a)
+  if (iqamaAlertDays.length === 0) {
+    response.status(400).json({ message: 'At least one valid alert threshold is required.' })
+    return
+  }
+
+  data.settings.iqamaAlertDays = iqamaAlertDays
+  addAudit(data, user, 'update_iqama_alerts', iqamaAlertDays.join(', '))
+  await writeData(data)
+  response.json(data.settings)
 })
 
 app.post('/api/reset', async (request, response) => {
@@ -441,6 +505,8 @@ app.post('/api/reset', async (request, response) => {
   response.json({
     employees: resetWithAudit.employees.map(publicEmployee),
     goals: resetWithAudit.goals,
+    iqamaRecords: resetWithAudit.iqamaRecords,
+    settings: resetWithAudit.settings,
     auditLog: resetWithAudit.auditLog,
     notifications: getUserNotifications(resetWithAudit, user),
     user: publicEmployee(user),
@@ -493,6 +559,8 @@ app.post('/api/restore', async (request, response) => {
   response.json({
     employees: nextData.employees.map(publicEmployee),
     goals: nextData.goals,
+    iqamaRecords: nextData.iqamaRecords,
+    settings: nextData.settings,
     auditLog: nextData.auditLog.slice(0, 80),
     notifications: getUserNotifications(nextData, user),
     user: publicEmployee(user),
@@ -673,18 +741,23 @@ function iqamaFromRequest(body: Record<string, unknown>): IqamaRecord {
     expiryDate: String(body.expiryDate ?? ''),
     notes: String(body.notes ?? '').trim(),
     updatedAt: new Date().toISOString(),
+    renewalHistory: [],
+    alertedThresholds: [],
   }
 }
 
 function notifyIqamaStatus(data: AppData, record: IqamaRecord, employeeName: string, exceptUserId?: string) {
   const days = daysUntil(record.expiryDate)
-  if (days > 90) return
+  const threshold = [...data.settings.iqamaAlertDays].sort((a, b) => a - b).find((value) => days <= value)
+  if (days >= 0 && (!threshold || record.alertedThresholds.includes(threshold))) return
+  if (days < 0 && record.alertedThresholds.includes(-1)) return
 
   const message =
     days < 0
       ? `إقامة ${employeeName} منتهية منذ ${Math.abs(days)} يوم.`
       : `إقامة ${employeeName} تنتهي خلال ${days} يوم.`
   notifyManagers(data, days < 0 ? 'إقامة منتهية' : 'إقامة تنتهي قريبا', message, 'iqama', exceptUserId)
+  record.alertedThresholds = [...record.alertedThresholds, days < 0 ? -1 : threshold!]
 }
 
 function daysUntil(value: string) {

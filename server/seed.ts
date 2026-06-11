@@ -58,6 +58,21 @@ export type IqamaRecord = {
   expiryDate: string
   notes: string
   updatedAt: string
+  renewalHistory: IqamaRenewal[]
+  alertedThresholds: number[]
+}
+
+export type IqamaRenewal = {
+  id: number
+  previousExpiryDate: string
+  newExpiryDate: string
+  note: string
+  author: string
+  date: string
+}
+
+export type AppSettings = {
+  iqamaAlertDays: number[]
 }
 
 export type AppData = {
@@ -67,6 +82,7 @@ export type AppData = {
   auditLog: AuditEntry[]
   sessions: SessionRecord[]
   notifications: NotificationRecord[]
+  settings: AppSettings
 }
 
 export type SessionRecord = {
@@ -168,6 +184,9 @@ export const seedData: AppData = {
   auditLog: [],
   sessions: [],
   notifications: [],
+  settings: {
+    iqamaAlertDays: [90, 60, 30, 7],
+  },
 }
 
 function hashSeedPin(pin: string) {

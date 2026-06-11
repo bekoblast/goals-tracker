@@ -571,6 +571,89 @@ h2 {
   color: #65736d;
 }
 
+.renewal-button {
+  color: #166534;
+  background: #e6f6ec;
+}
+
+.iqama-renewal-history {
+  grid-column: 1 / -1;
+  padding-top: 10px;
+  border-top: 1px solid #e6eef3;
+  color: #65736d;
+  font-size: 13px;
+}
+
+.iqama-renewal-history summary {
+  color: #166534;
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.iqama-renewal-history > div {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.iqama-renewal-history article {
+  padding: 10px;
+  border-radius: 8px;
+  background: #f0f8f3;
+}
+
+.iqama-renewal-history strong,
+.iqama-renewal-history span {
+  display: block;
+}
+
+.iqama-renewal-history strong {
+  color: #166534;
+}
+
+.iqama-renewal-history p {
+  margin: 5px 0 0;
+}
+
+.iqama-renewal-panel,
+.iqama-settings-panel {
+  align-self: start;
+}
+
+.settings-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+  margin-top: 16px;
+}
+
+.settings-form label {
+  display: grid;
+  gap: 7px;
+  color: #26343d;
+  font-weight: 800;
+}
+
+.settings-form input {
+  min-height: 42px;
+  border: 1px solid #d7e4eb;
+  border-radius: 8px;
+  padding: 0 11px;
+  outline-color: #14aee8;
+}
+
+.settings-form button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 14px;
+  color: #ffffff;
+  background: #111318;
+  font: inherit;
+  font-weight: 900;
+}
+
 .iqama-valid {
   color: #166534;
   background: #e6f6ec;
@@ -1384,7 +1467,8 @@ h2 {
   }
 
   .iqama-record,
-  .iqama-form {
+  .iqama-form,
+  .settings-form {
     grid-template-columns: 1fr;
   }
 

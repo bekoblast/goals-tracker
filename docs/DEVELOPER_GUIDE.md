@@ -148,6 +148,16 @@ The module calculates three expiry states:
 
 Creating or updating a near-expiry record generates an in-app notification for other Managers and Super Admins.
 
+Renewals use a dedicated endpoint so the app preserves the previous expiry date, new expiry date, note, author, and timestamp. Renewal history remains attached to the Iqama record.
+
+Super Admins configure shared alert thresholds through `settings.iqamaAlertDays`. The default thresholds are:
+
+```text
+90, 60, 30, 7 days
+```
+
+Each record tracks delivered thresholds to prevent duplicate notifications. Changing or renewing an expiry date resets that alert progression.
+
 ## Quality Checks
 
 Run before pushing:

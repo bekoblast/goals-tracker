@@ -55,13 +55,22 @@ function normalizeData(data: AppData): AppData {
     }
   }
 
+  const iqamaRecords = (data.iqamaRecords ?? []).map((record) => ({
+    ...record,
+    renewalHistory: record.renewalHistory ?? [],
+    alertedThresholds: record.alertedThresholds ?? [],
+  }))
+
   return {
     ...data,
     employees,
-    iqamaRecords: data.iqamaRecords ?? [],
+    iqamaRecords,
     auditLog: data.auditLog ?? [],
     sessions: data.sessions ?? [],
     notifications: data.notifications ?? [],
+    settings: {
+      iqamaAlertDays: data.settings?.iqamaAlertDays ?? seedData.settings.iqamaAlertDays,
+    },
   }
 }
 

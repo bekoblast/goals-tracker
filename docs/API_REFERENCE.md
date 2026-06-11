@@ -167,9 +167,32 @@ Creates an Iqama record linked to an active employee.
 
 Updates Iqama details and can generate an expiry notification when the record expires within 90 days.
 
+### `POST /api/iqama/:id/renewals`
+
+Records a renewal with the previous expiry date, new expiry date, note, author, and timestamp.
+
+```json
+{
+  "newExpiryDate": "2027-07-15",
+  "note": "Renewed for one year."
+}
+```
+
 ### `DELETE /api/iqama/:id`
 
 Deletes an Iqama record.
+
+## Settings
+
+### `PATCH /api/settings/iqama-alerts`
+
+Super Admin only. Configures the shared Iqama expiry alert thresholds.
+
+```json
+{
+  "iqamaAlertDays": [90, 60, 30, 7]
+}
+```
 
 ## Admin Data
 
