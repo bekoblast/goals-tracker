@@ -11,6 +11,8 @@ import {
   Download,
   Filter,
   HelpCircle,
+  IdCard,
+  LayoutDashboard,
   Pencil,
   RefreshCw,
   Search,
@@ -24,6 +26,7 @@ import './App.css'
 
 type Role = 'super_admin' | 'manager' | 'employee'
 type GoalStatus = 'not_started' | 'in_progress' | 'at_risk' | 'completed'
+type ModuleView = 'overview' | 'goals' | 'iqama'
 
 type Employee = {
   id: string
@@ -174,6 +177,7 @@ function App() {
   const [activityDraft, setActivityDraft] = useState('')
   const [isGuideOpen, setIsGuideOpen] = useState(false)
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
+  const [activeModule, setActiveModule] = useState<ModuleView>('overview')
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const role = currentUser?.role ?? 'employee'
@@ -709,6 +713,32 @@ function App() {
             <UsersRound size={17} />
             {currentUser.name}
           </button>
+          <span className="nav-section-label">مساحات العمل</span>
+          <button
+            className={activeModule === 'overview' ? 'active' : ''}
+            onClick={() => setActiveModule('overview')}
+            type="button"
+          >
+            <LayoutDashboard size={17} />
+            لوحة المعلومات
+          </button>
+          <button
+            className={activeModule === 'goals' ? 'active' : ''}
+            onClick={() => setActiveModule('goals')}
+            type="button"
+          >
+            <ClipboardList size={17} />
+            مسار الأهداف
+          </button>
+          <button
+            className={activeModule === 'iqama' ? 'active' : ''}
+            onClick={() => setActiveModule('iqama')}
+            type="button"
+          >
+            <IdCard size={17} />
+            متابعة الإقامات
+          </button>
+          <span className="nav-section-label">أدوات مشتركة</span>
           <button onClick={() => setIsGuideOpen(true)} type="button">
             <HelpCircle size={17} />
             دليل الاستخدام
@@ -740,6 +770,18 @@ function App() {
         </div>
       </aside>
 
+      {activeModule === 'overview' ? (
+        <GeneralDashboard
+          activeEmployees={employees.filter((employee) => employee.active).length}
+          metrics={metrics}
+          notifications={notifications}
+          onOpenModule={setActiveModule}
+          recentActivities={latestActivities}
+          role={role}
+        />
+      ) : activeModule === 'iqama' ? (
+        <IqamaModulePlaceholder onBack={() => setActiveModule('overview')} />
+      ) : (
       <section className="workspace">
         <header className="topbar">
           <div>
@@ -1348,6 +1390,7 @@ function App() {
           </section>
         </section>
       </section>
+      )}
 
       {isGuideOpen && <GuideModal onClose={() => setIsGuideOpen(false)} role={role} />}
       {isNotificationsOpen && (
@@ -1359,6 +1402,160 @@ function App() {
         />
       )}
     </main>
+  )
+}
+
+function GeneralDashboard({
+  activeEmployees,
+  metrics,
+  notifications,
+  onOpenModule,
+  recentActivities,
+  role,
+}: {
+  activeEmployees: number
+  metrics: { average: number; completed: number; atRisk: number; total: number; activities: number }
+  notifications: NotificationItem[]
+  onOpenModule: (module: ModuleView) => void
+  recentActivities: Array<ActivityItem & { goalTitle: string }>
+  role: Role
+}) {
+  const unreadNotifications = notifications.filter((notification) => !notification.read)
+
+  return (
+    <section className="workspace hub-workspace">
+      <header className="topbar">
+        <div>
+          <p className="eyebrow">لوحة المعلومات العامة · {roleLabel(role)}</p>
+          <h1>كل ما يحتاجه فريقك في مساحة تشغيل واحدة واضحة.</h1>
+        </div>
+      </header>
+
+      <section className="metric-grid" aria-label="الملخص العام">
+        <MetricCard icon={<UsersRound />} label="الموظفون النشطون" value={activeEmployees.toString()} />
+        <MetricCard icon={<ClipboardList />} label="إجمالي الأهداف" value={metrics.total.toString()} />
+        <MetricCard icon={<BarChart3 />} label="متوسط إنجاز الأهداف" value={`${metrics.average}%`} />
+        <MetricCard icon={<Bell />} label="تنبيهات غير مقروءة" value={unreadNotifications.length.toString()} />
+      </section>
+
+      <section className="hub-module-grid" aria-label="وحدات النظام">
+        <button className="hub-module-card" onClick={() => onOpenModule('goals')} type="button">
+          <div className="hub-module-icon goals-module-icon">
+            <ClipboardList size={24} />
+          </div>
+          <div>
+            <span>وحدة فعالة</span>
+            <h2>مسار الأهداف</h2>
+            <p>إدارة أهداف الفريق، الأنشطة، نسب الإنجاز، والتقارير.</p>
+          </div>
+          <div className="module-stats">
+            <strong>{metrics.total} أهداف</strong>
+            <strong>{metrics.atRisk} بحاجة لمتابعة</strong>
+          </div>
+        </button>
+
+        <button className="hub-module-card iqama-module-card" onClick={() => onOpenModule('iqama')} type="button">
+          <div className="hub-module-icon iqama-module-icon">
+            <IdCard size={24} />
+          </div>
+          <div>
+            <span>قيد التطوير</span>
+            <h2>متابعة الإقامات</h2>
+            <p>متابعة تواريخ انتهاء الإقامات، التجديدات، والتنبيهات المهمة.</p>
+          </div>
+          <div className="module-stats">
+            <strong>جاهز للمرحلة التالية</strong>
+          </div>
+        </button>
+      </section>
+
+      <section className="hub-summary-grid">
+        <section className="panel">
+          <div className="panel-title">
+            <div>
+              <h2>تنبيهات تحتاج انتباها</h2>
+              <p>ملخص موحد لأهم ما يحتاج متابعة عبر الوحدات.</p>
+            </div>
+            <Bell size={22} />
+          </div>
+          <div className="hub-alert-list">
+            {metrics.atRisk > 0 && (
+              <button onClick={() => onOpenModule('goals')} type="button">
+                <span className="hub-alert-dot warning-dot" />
+                <div>
+                  <strong>{metrics.atRisk} هدف بحاجة لمتابعة</strong>
+                  <p>افتح مسار الأهداف لمراجعة التفاصيل.</p>
+                </div>
+              </button>
+            )}
+            {unreadNotifications.slice(0, 4).map((notification) => (
+              <article key={notification.id}>
+                <span className="hub-alert-dot info-dot" />
+                <div>
+                  <strong>{notification.title}</strong>
+                  <p>{notification.message}</p>
+                </div>
+              </article>
+            ))}
+            {metrics.atRisk === 0 && unreadNotifications.length === 0 && (
+              <p className="empty-state">لا توجد تنبيهات عاجلة حاليا.</p>
+            )}
+          </div>
+        </section>
+
+        <section className="panel">
+          <div className="panel-title">
+            <div>
+              <h2>آخر أنشطة الفريق</h2>
+              <p>أحدث الحركات المسجلة في الوحدات الحالية.</p>
+            </div>
+            <Activity size={22} />
+          </div>
+          <div className="feed-list">
+            {recentActivities.slice(0, 5).map((item) => (
+              <article className="feed-item" key={item.id}>
+                <span>{item.goalTitle}</span>
+                <strong>{item.text}</strong>
+                <p>{item.author} · {formatDate(item.date)}</p>
+              </article>
+            ))}
+            {recentActivities.length === 0 && <p className="empty-state">لا توجد أنشطة مسجلة بعد.</p>}
+          </div>
+        </section>
+      </section>
+    </section>
+  )
+}
+
+function IqamaModulePlaceholder({ onBack }: { onBack: () => void }) {
+  return (
+    <section className="workspace hub-workspace">
+      <header className="topbar">
+        <div>
+          <p className="eyebrow">وحدة جديدة</p>
+          <h1>متابعة الإقامات</h1>
+        </div>
+        <button className="soft-button" onClick={onBack} type="button">
+          <LayoutDashboard size={18} />
+          العودة للوحة المعلومات
+        </button>
+      </header>
+
+      <section className="panel iqama-placeholder">
+        <div className="hub-module-icon iqama-module-icon">
+          <IdCard size={28} />
+        </div>
+        <h2>الأساس جاهز، والخطوة التالية هي بيانات الإقامات.</h2>
+        <p>
+          سنضيف سجلات الموظفين، تواريخ الانتهاء، حالات التجديد، التنبيهات، والصلاحيات الخاصة بهذه الوحدة.
+        </p>
+        <div className="placeholder-status-grid">
+          <span>ساري</span>
+          <span>ينتهي قريبا</span>
+          <span>منتهي</span>
+        </div>
+      </section>
+    </section>
   )
 }
 
