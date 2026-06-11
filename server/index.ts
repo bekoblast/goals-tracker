@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import cors from 'cors'
 import bcrypt from 'bcryptjs'
 import express, { type Request, type Response } from 'express'
-import { type AppData, type Employee, type Goal, type GoalStatus, type SessionRecord } from './seed.ts'
+import { type AppData, type Employee, type Goal, type GoalStatus, type IqamaRecord, type SessionRecord } from './seed.ts'
 import { readData, resetData, writeData } from './store.ts'
 
 const app = express()
@@ -57,6 +57,7 @@ app.get('/api/bootstrap', async (request, response) => {
   response.json({
     employees: data.employees.map(publicEmployee),
     goals: canManageGoals(user) ? data.goals : data.goals.filter((goal) => goal.owner === user.name),
+    iqamaRecords: canManageIqama(user) ? data.iqamaRecords : [],
     auditLog: user.role === 'super_admin' ? data.auditLog.slice(0, 80) : [],
     notifications: getUserNotifications(data, user),
     user: publicEmployee(user),
@@ -332,6 +333,87 @@ app.post('/api/goals/:id/activities', async (request, response) => {
   response.status(201).json(activity)
 })
 
+app.get('/api/iqama', async (request, response) => {
+  const data = await readData()
+  const user = requireUser(request, response, data)
+  if (!user || !requireIqamaManager(user, response)) return
+
+  response.json(data.iqamaRecords)
+})
+
+app.post('/api/iqama', async (request, response) => {
+  const data = await readData()
+  const user = requireUser(request, response, data)
+  if (!user || !requireIqamaManager(user, response)) return
+
+  const record = iqamaFromRequest(request.body)
+  if (!record.employeeId || !record.iqamaNumber || !record.expiryDate) {
+    response.status(400).json({ message: 'Employee, Iqama number, and expiry date are required.' })
+    return
+  }
+  if (!data.employees.some((employee) => employee.id === record.employeeId && employee.active)) {
+    response.status(400).json({ message: 'The selected employee is not active.' })
+    return
+  }
+  if (data.iqamaRecords.some((item) => item.employeeId === record.employeeId || item.iqamaNumber === record.iqamaNumber)) {
+    response.status(409).json({ message: 'An Iqama record already exists for this employee or number.' })
+    return
+  }
+
+  data.iqamaRecords = [record, ...data.iqamaRecords]
+  const employee = data.employees.find((item) => item.id === record.employeeId)
+  addAudit(data, user, 'create_iqama', employee?.name ?? record.iqamaNumber)
+  notifyIqamaStatus(data, record, employee?.name ?? record.iqamaNumber, user.id)
+  await writeData(data)
+  response.status(201).json(record)
+})
+
+app.patch('/api/iqama/:id', async (request, response) => {
+  const data = await readData()
+  const user = requireUser(request, response, data)
+  if (!user || !requireIqamaManager(user, response)) return
+
+  const record = data.iqamaRecords.find((item) => item.id === Number(request.params.id))
+  if (!record) {
+    response.status(404).json({ message: 'Iqama record was not found.' })
+    return
+  }
+
+  Object.assign(record, {
+    iqamaNumber: request.body.iqamaNumber === undefined ? record.iqamaNumber : String(request.body.iqamaNumber).trim(),
+    nationality: request.body.nationality === undefined ? record.nationality : String(request.body.nationality).trim(),
+    jobTitle: request.body.jobTitle === undefined ? record.jobTitle : String(request.body.jobTitle).trim(),
+    issueDate: request.body.issueDate === undefined ? record.issueDate : String(request.body.issueDate),
+    expiryDate: request.body.expiryDate === undefined ? record.expiryDate : String(request.body.expiryDate),
+    notes: request.body.notes === undefined ? record.notes : String(request.body.notes).trim(),
+    updatedAt: new Date().toISOString(),
+  })
+
+  const employee = data.employees.find((item) => item.id === record.employeeId)
+  addAudit(data, user, 'update_iqama', employee?.name ?? record.iqamaNumber)
+  notifyIqamaStatus(data, record, employee?.name ?? record.iqamaNumber, user.id)
+  await writeData(data)
+  response.json(record)
+})
+
+app.delete('/api/iqama/:id', async (request, response) => {
+  const data = await readData()
+  const user = requireUser(request, response, data)
+  if (!user || !requireIqamaManager(user, response)) return
+
+  const record = data.iqamaRecords.find((item) => item.id === Number(request.params.id))
+  if (!record) {
+    response.status(404).json({ message: 'Iqama record was not found.' })
+    return
+  }
+
+  data.iqamaRecords = data.iqamaRecords.filter((item) => item.id !== record.id)
+  const employee = data.employees.find((item) => item.id === record.employeeId)
+  addAudit(data, user, 'delete_iqama', employee?.name ?? record.iqamaNumber)
+  await writeData(data)
+  response.status(204).send()
+})
+
 app.post('/api/reset', async (request, response) => {
   const data = await readData()
   const user = requireUser(request, response, data)
@@ -496,7 +578,20 @@ function requireSuperAdmin(user: Employee, response: Response) {
   return true
 }
 
+function requireIqamaManager(user: Employee, response: Response) {
+  if (!canManageIqama(user)) {
+    response.status(403).json({ message: 'Iqama manager access is required.' })
+    return false
+  }
+
+  return true
+}
+
 function canManageGoals(user: Employee) {
+  return user.role === 'super_admin' || user.role === 'manager'
+}
+
+function canManageIqama(user: Employee) {
   return user.role === 'super_admin' || user.role === 'manager'
 }
 
@@ -565,6 +660,38 @@ function notifyAdmins(data: AppData, title: string, message: string, type: strin
       addNotification(data, employee.id, title, message, type)
     }
   }
+}
+
+function iqamaFromRequest(body: Record<string, unknown>): IqamaRecord {
+  return {
+    id: Date.now(),
+    employeeId: String(body.employeeId ?? '').trim(),
+    iqamaNumber: String(body.iqamaNumber ?? '').trim(),
+    nationality: String(body.nationality ?? '').trim(),
+    jobTitle: String(body.jobTitle ?? '').trim(),
+    issueDate: String(body.issueDate ?? ''),
+    expiryDate: String(body.expiryDate ?? ''),
+    notes: String(body.notes ?? '').trim(),
+    updatedAt: new Date().toISOString(),
+  }
+}
+
+function notifyIqamaStatus(data: AppData, record: IqamaRecord, employeeName: string, exceptUserId?: string) {
+  const days = daysUntil(record.expiryDate)
+  if (days > 90) return
+
+  const message =
+    days < 0
+      ? `إقامة ${employeeName} منتهية منذ ${Math.abs(days)} يوم.`
+      : `إقامة ${employeeName} تنتهي خلال ${days} يوم.`
+  notifyManagers(data, days < 0 ? 'إقامة منتهية' : 'إقامة تنتهي قريبا', message, 'iqama', exceptUserId)
+}
+
+function daysUntil(value: string) {
+  const target = new Date(`${value}T00:00:00`).getTime()
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return Math.ceil((target - today.getTime()) / 86_400_000)
 }
 
 function createSession(userId: string, remember: boolean) {

@@ -132,6 +132,22 @@ Notifications are in-app only. They are generated for events such as:
 
 Each notification has read/unread state and belongs to one user.
 
+### Employee Operations Hub
+
+The first screen after login is a shared dashboard that summarizes active employees, goals, alerts, and recent activities. Managers and Super Admins can switch between the Goals and Iqama modules.
+
+### Iqama Records
+
+Iqama records are stored in `iqamaRecords` and linked to employees by `employeeId`. Only Managers and Super Admins receive or manage these records.
+
+The module calculates three expiry states:
+
+- `valid`: more than 90 days remaining
+- `expiring`: 0 to 90 days remaining
+- `expired`: expiry date is in the past
+
+Creating or updating a near-expiry record generates an in-app notification for other Managers and Super Admins.
+
 ## Quality Checks
 
 Run before pushing:

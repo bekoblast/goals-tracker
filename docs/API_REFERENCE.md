@@ -139,6 +139,38 @@ Adds an activity to a goal.
 }
 ```
 
+## Iqama Records
+
+Manager or Super Admin only. Employees do not receive Iqama data in bootstrap responses.
+
+### `GET /api/iqama`
+
+Returns all Iqama records.
+
+### `POST /api/iqama`
+
+Creates an Iqama record linked to an active employee.
+
+```json
+{
+  "employeeId": "amina",
+  "iqamaNumber": "1234567890",
+  "nationality": "Saudi",
+  "jobTitle": "Operations Coordinator",
+  "issueDate": "2025-07-01",
+  "expiryDate": "2026-07-15",
+  "notes": "Renewal preparation started."
+}
+```
+
+### `PATCH /api/iqama/:id`
+
+Updates Iqama details and can generate an expiry notification when the record expires within 90 days.
+
+### `DELETE /api/iqama/:id`
+
+Deletes an Iqama record.
+
 ## Admin Data
 
 Super Admin only.

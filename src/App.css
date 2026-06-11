@@ -521,6 +521,75 @@ h2 {
   text-align: center;
 }
 
+.iqama-content-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(340px, 0.75fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.iqama-filters {
+  grid-template-columns: minmax(0, 1fr) 170px;
+}
+
+.iqama-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.iqama-record {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 13px;
+  border: 1px solid #dde9ef;
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.iqama-record strong,
+.iqama-record span,
+.iqama-record small {
+  display: block;
+}
+
+.iqama-record p {
+  margin: 5px 0 0;
+  color: #65736d;
+}
+
+.iqama-record-status {
+  min-width: 150px;
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+
+.iqama-record-status small {
+  color: #65736d;
+}
+
+.iqama-valid {
+  color: #166534;
+  background: #e6f6ec;
+}
+
+.iqama-expiring {
+  color: #9a5b00;
+  background: #fff3d4;
+}
+
+.iqama-expired {
+  color: #b42318;
+  background: #fff0ed;
+}
+
+.iqama-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .iqama-placeholder p {
   max-width: 640px;
   margin-bottom: 0;
@@ -1276,7 +1345,8 @@ h2 {
   .content-grid,
   .lower-grid,
   .hub-module-grid,
-  .hub-summary-grid {
+  .hub-summary-grid,
+  .iqama-content-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -1304,12 +1374,22 @@ h2 {
   .lower-grid,
   .hub-module-grid,
   .hub-summary-grid,
+  .iqama-content-grid,
   .guide-grid,
   .filters,
   .goal-form,
   .notification-item,
   .user-row {
     grid-template-columns: 1fr;
+  }
+
+  .iqama-record,
+  .iqama-form {
+    grid-template-columns: 1fr;
+  }
+
+  .iqama-record-status {
+    min-width: 0;
   }
 
   .soft-button {

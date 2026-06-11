@@ -58,6 +58,7 @@ function normalizeData(data: AppData): AppData {
   return {
     ...data,
     employees,
+    iqamaRecords: data.iqamaRecords ?? [],
     auditLog: data.auditLog ?? [],
     sessions: data.sessions ?? [],
     notifications: data.notifications ?? [],

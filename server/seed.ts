@@ -48,9 +48,22 @@ export type Goal = {
   activities: ActivityItem[]
 }
 
+export type IqamaRecord = {
+  id: number
+  employeeId: string
+  iqamaNumber: string
+  nationality: string
+  jobTitle: string
+  issueDate: string
+  expiryDate: string
+  notes: string
+  updatedAt: string
+}
+
 export type AppData = {
   employees: Employee[]
   goals: Goal[]
+  iqamaRecords: IqamaRecord[]
   auditLog: AuditEntry[]
   sessions: SessionRecord[]
   notifications: NotificationRecord[]
@@ -151,6 +164,7 @@ export const seedData: AppData = {
       ],
     },
   ],
+  iqamaRecords: [],
   auditLog: [],
   sessions: [],
   notifications: [],

@@ -72,9 +72,22 @@ type ActivityItem = {
   date: string
 }
 
+type IqamaRecord = {
+  id: number
+  employeeId: string
+  iqamaNumber: string
+  nationality: string
+  jobTitle: string
+  issueDate: string
+  expiryDate: string
+  notes: string
+  updatedAt: string
+}
+
 type AppData = {
   employees: Employee[]
   goals: Goal[]
+  iqamaRecords: IqamaRecord[]
   auditLog: AuditEntry[]
   notifications: NotificationItem[]
 }
@@ -100,6 +113,16 @@ const emptyEmployee = {
   id: '',
   pin: '',
   role: 'employee' as Role,
+}
+
+const emptyIqama = {
+  employeeId: '',
+  iqamaNumber: '',
+  nationality: '',
+  jobTitle: '',
+  issueDate: '',
+  expiryDate: '',
+  notes: '',
 }
 
 const statusLabels: Record<GoalStatus, string> = {
@@ -167,6 +190,7 @@ function App() {
   const [goals, setGoals] = useState<Goal[]>([])
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([])
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
+  const [iqamaRecords, setIqamaRecords] = useState<IqamaRecord[]>([])
   const [selectedGoalId, setSelectedGoalId] = useState(0)
   const [ownerFilter, setOwnerFilter] = useState('الكل')
   const [statusFilter, setStatusFilter] = useState('الكل')
@@ -183,6 +207,7 @@ function App() {
   const role = currentUser?.role ?? 'employee'
   const canManageGoals = role === 'manager' || role === 'super_admin'
   const canManageUsers = role === 'super_admin'
+  const canManageIqama = role === 'manager' || role === 'super_admin'
   const unreadNotifications = notifications.filter((notification) => !notification.read).length
 
   const people = useMemo(
@@ -211,6 +236,7 @@ function App() {
       setGoals(data.goals)
       setAuditLog(data.auditLog ?? [])
       setNotifications(data.notifications ?? [])
+      setIqamaRecords(data.iqamaRecords ?? [])
       setSelectedGoalId(data.goals[0]?.id ?? 0)
       setGoalDraft((current) => ({ ...current, owner: current.owner || firstEmployee }))
     } catch (error) {
@@ -222,6 +248,7 @@ function App() {
         setEmployees([])
         setAuditLog([])
         setNotifications([])
+        setIqamaRecords([])
         setSelectedGoalId(0)
         setError('انتهت الجلسة. سجل الدخول مرة أخرى.')
         return
@@ -260,6 +287,7 @@ function App() {
     setEmployees([])
     setAuditLog([])
     setNotifications([])
+    setIqamaRecords([])
     setSelectedGoalId(0)
   }
 
@@ -440,6 +468,7 @@ function App() {
       setGoals(data.goals)
       setAuditLog(data.auditLog ?? [])
       setNotifications(data.notifications ?? [])
+      setIqamaRecords(data.iqamaRecords ?? [])
       setSelectedGoalId(data.goals[0]?.id ?? 0)
       event.target.value = ''
     } catch {
@@ -642,6 +671,7 @@ function App() {
       setGoals(data.goals)
       setAuditLog(data.auditLog ?? [])
       setNotifications(data.notifications ?? [])
+      setIqamaRecords(data.iqamaRecords ?? [])
       setSelectedGoalId(data.goals[0]?.id ?? 0)
     } catch {
       setError('تعذر إعادة بيانات التجربة.')
@@ -650,6 +680,27 @@ function App() {
 
   const replaceGoal = (goal: Goal) => {
     setGoals((current) => current.map((item) => (item.id === goal.id ? goal : item)))
+  }
+
+  const createIqama = async (draft: typeof emptyIqama) => {
+    const record = await api<IqamaRecord>('/api/iqama', {
+      method: 'POST',
+      body: JSON.stringify(draft),
+    }, sessionToken)
+    setIqamaRecords((current) => [record, ...current])
+  }
+
+  const updateIqama = async (recordId: number, draft: typeof emptyIqama) => {
+    const record = await api<IqamaRecord>(`/api/iqama/${recordId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(draft),
+    }, sessionToken)
+    setIqamaRecords((current) => current.map((item) => (item.id === record.id ? record : item)))
+  }
+
+  const deleteIqama = async (recordId: number) => {
+    await api(`/api/iqama/${recordId}`, { method: 'DELETE' }, sessionToken)
+    setIqamaRecords((current) => current.filter((item) => item.id !== recordId))
   }
 
   if (!currentUser) {
@@ -730,14 +781,16 @@ function App() {
             <ClipboardList size={17} />
             مسار الأهداف
           </button>
-          <button
-            className={activeModule === 'iqama' ? 'active' : ''}
-            onClick={() => setActiveModule('iqama')}
-            type="button"
-          >
-            <IdCard size={17} />
-            متابعة الإقامات
-          </button>
+          {canManageIqama && (
+            <button
+              className={activeModule === 'iqama' ? 'active' : ''}
+              onClick={() => setActiveModule('iqama')}
+              type="button"
+            >
+              <IdCard size={17} />
+              متابعة الإقامات
+            </button>
+          )}
           <span className="nav-section-label">أدوات مشتركة</span>
           <button onClick={() => setIsGuideOpen(true)} type="button">
             <HelpCircle size={17} />
@@ -778,9 +831,16 @@ function App() {
           onOpenModule={setActiveModule}
           recentActivities={latestActivities}
           role={role}
+          iqamaRecords={iqamaRecords}
         />
       ) : activeModule === 'iqama' ? (
-        <IqamaModulePlaceholder onBack={() => setActiveModule('overview')} />
+        <IqamaWorkspace
+          employees={employees}
+          onCreate={createIqama}
+          onDelete={deleteIqama}
+          onUpdate={updateIqama}
+          records={iqamaRecords}
+        />
       ) : (
       <section className="workspace">
         <header className="topbar">
@@ -1412,6 +1472,7 @@ function GeneralDashboard({
   onOpenModule,
   recentActivities,
   role,
+  iqamaRecords,
 }: {
   activeEmployees: number
   metrics: { average: number; completed: number; atRisk: number; total: number; activities: number }
@@ -1419,8 +1480,14 @@ function GeneralDashboard({
   onOpenModule: (module: ModuleView) => void
   recentActivities: Array<ActivityItem & { goalTitle: string }>
   role: Role
+  iqamaRecords: IqamaRecord[]
 }) {
   const unreadNotifications = notifications.filter((notification) => !notification.read)
+  const iqamaExpiring = iqamaRecords.filter((record) => {
+    const days = getIqamaInfo(record.expiryDate).days
+    return days >= 0 && days <= 90
+  }).length
+  const iqamaExpired = iqamaRecords.filter((record) => getIqamaInfo(record.expiryDate).days < 0).length
 
   return (
     <section className="workspace hub-workspace">
@@ -1454,19 +1521,20 @@ function GeneralDashboard({
           </div>
         </button>
 
-        <button className="hub-module-card iqama-module-card" onClick={() => onOpenModule('iqama')} type="button">
+        {role !== 'employee' && <button className="hub-module-card iqama-module-card" onClick={() => onOpenModule('iqama')} type="button">
           <div className="hub-module-icon iqama-module-icon">
             <IdCard size={24} />
           </div>
           <div>
-            <span>قيد التطوير</span>
+            <span>وحدة فعالة</span>
             <h2>متابعة الإقامات</h2>
             <p>متابعة تواريخ انتهاء الإقامات، التجديدات، والتنبيهات المهمة.</p>
           </div>
           <div className="module-stats">
-            <strong>جاهز للمرحلة التالية</strong>
+            <strong>{iqamaRecords.length} سجل</strong>
+            <strong>{iqamaExpiring + iqamaExpired} يحتاج متابعة</strong>
           </div>
-        </button>
+        </button>}
       </section>
 
       <section className="hub-summary-grid">
@@ -1485,6 +1553,15 @@ function GeneralDashboard({
                 <div>
                   <strong>{metrics.atRisk} هدف بحاجة لمتابعة</strong>
                   <p>افتح مسار الأهداف لمراجعة التفاصيل.</p>
+                </div>
+              </button>
+            )}
+            {role !== 'employee' && iqamaExpired > 0 && (
+              <button onClick={() => onOpenModule('iqama')} type="button">
+                <span className="hub-alert-dot warning-dot" />
+                <div>
+                  <strong>{iqamaExpired} إقامة منتهية</strong>
+                  <p>افتح متابعة الإقامات لمعالجة التجديد.</p>
                 </div>
               </button>
             )}
@@ -1527,33 +1604,181 @@ function GeneralDashboard({
   )
 }
 
-function IqamaModulePlaceholder({ onBack }: { onBack: () => void }) {
+function IqamaWorkspace({
+  employees,
+  onCreate,
+  onDelete,
+  onUpdate,
+  records,
+}: {
+  employees: Employee[]
+  onCreate: (draft: typeof emptyIqama) => Promise<void>
+  onDelete: (recordId: number) => Promise<void>
+  onUpdate: (recordId: number, draft: typeof emptyIqama) => Promise<void>
+  records: IqamaRecord[]
+}) {
+  const [draft, setDraft] = useState(emptyIqama)
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [search, setSearch] = useState('')
+  const [status, setStatus] = useState('all')
+  const [formError, setFormError] = useState('')
+  const employeeById = new Map(employees.map((employee) => [employee.id, employee]))
+  const eligibleEmployees = employees.filter((employee) => employee.role === 'employee' && employee.active)
+  const metrics = {
+    total: records.length,
+    valid: records.filter((record) => getIqamaInfo(record.expiryDate).status === 'valid').length,
+    expiring: records.filter((record) => getIqamaInfo(record.expiryDate).status === 'expiring').length,
+    expired: records.filter((record) => getIqamaInfo(record.expiryDate).status === 'expired').length,
+  }
+  const visibleRecords = records.filter((record) => {
+    const employee = employeeById.get(record.employeeId)
+    const term = search.trim().toLowerCase()
+    const matchesSearch =
+      !term ||
+      `${employee?.name ?? ''} ${record.iqamaNumber} ${record.nationality} ${record.jobTitle}`
+        .toLowerCase()
+        .includes(term)
+    return matchesSearch && (status === 'all' || getIqamaInfo(record.expiryDate).status === status)
+  })
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
+    setFormError('')
+    try {
+      if (editingId) await onUpdate(editingId, draft)
+      else await onCreate(draft)
+      setDraft(emptyIqama)
+      setEditingId(null)
+    } catch {
+      setFormError('تعذر حفظ سجل الإقامة. تأكد من البيانات وعدم تكرار الموظف أو رقم الإقامة.')
+    }
+  }
+
+  const edit = (record: IqamaRecord) => {
+    setEditingId(record.id)
+    setDraft({
+      employeeId: record.employeeId,
+      iqamaNumber: record.iqamaNumber,
+      nationality: record.nationality,
+      jobTitle: record.jobTitle,
+      issueDate: record.issueDate,
+      expiryDate: record.expiryDate,
+      notes: record.notes,
+    })
+  }
+
   return (
     <section className="workspace hub-workspace">
       <header className="topbar">
         <div>
-          <p className="eyebrow">وحدة جديدة</p>
+          <p className="eyebrow">إدارة بيانات الموظفين</p>
           <h1>متابعة الإقامات</h1>
         </div>
-        <button className="soft-button" onClick={onBack} type="button">
-          <LayoutDashboard size={18} />
-          العودة للوحة المعلومات
-        </button>
       </header>
 
-      <section className="panel iqama-placeholder">
-        <div className="hub-module-icon iqama-module-icon">
-          <IdCard size={28} />
-        </div>
-        <h2>الأساس جاهز، والخطوة التالية هي بيانات الإقامات.</h2>
-        <p>
-          سنضيف سجلات الموظفين، تواريخ الانتهاء، حالات التجديد، التنبيهات، والصلاحيات الخاصة بهذه الوحدة.
-        </p>
-        <div className="placeholder-status-grid">
-          <span>ساري</span>
-          <span>ينتهي قريبا</span>
-          <span>منتهي</span>
-        </div>
+      <section className="metric-grid" aria-label="ملخص الإقامات">
+        <MetricCard icon={<IdCard />} label="إجمالي السجلات" value={metrics.total.toString()} />
+        <MetricCard icon={<CheckCircle2 />} label="سارية" value={metrics.valid.toString()} />
+        <MetricCard icon={<CalendarDays />} label="تنتهي خلال 90 يوما" value={metrics.expiring.toString()} />
+        <MetricCard icon={<Bell />} label="منتهية" value={metrics.expired.toString()} />
+      </section>
+
+      <section className="iqama-content-grid">
+        <section className="panel">
+          <div className="panel-title">
+            <div>
+              <h2>سجلات الإقامات</h2>
+              <p>راجع الحالة، ابحث عن موظف، وابدأ التجديد قبل موعد الانتهاء.</p>
+            </div>
+            <IdCard size={22} />
+          </div>
+          <div className="filters iqama-filters">
+            <label className="search-box">
+              <Search size={17} />
+              <input onChange={(event) => setSearch(event.target.value)} placeholder="ابحث بالموظف أو رقم الإقامة" value={search} />
+            </label>
+            <label>
+              <Filter size={16} />
+              <select onChange={(event) => setStatus(event.target.value)} value={status}>
+                <option value="all">كل الحالات</option>
+                <option value="valid">سارية</option>
+                <option value="expiring">تنتهي قريبا</option>
+                <option value="expired">منتهية</option>
+              </select>
+            </label>
+          </div>
+          <div className="iqama-list">
+            {visibleRecords.map((record) => {
+              const info = getIqamaInfo(record.expiryDate)
+              return (
+                <article className="iqama-record" key={record.id}>
+                  <div>
+                    <strong>{employeeById.get(record.employeeId)?.name ?? record.employeeId}</strong>
+                    <span>{record.jobTitle || 'بدون مسمى وظيفي'} · {record.nationality || 'الجنسية غير محددة'}</span>
+                    <p>رقم الإقامة: {record.iqamaNumber}</p>
+                  </div>
+                  <div className="iqama-record-status">
+                    <span className={`status-pill iqama-${info.status}`}>{info.label}</span>
+                    <small>{formatDate(record.expiryDate)}</small>
+                  </div>
+                  <div className="row-actions">
+                    <button className="icon-button" onClick={() => edit(record)} type="button" aria-label="تعديل سجل الإقامة"><Pencil size={17} /></button>
+                    <button className="icon-button danger" onClick={() => void onDelete(record.id)} type="button" aria-label="حذف سجل الإقامة"><Trash2 size={17} /></button>
+                  </div>
+                </article>
+              )
+            })}
+            {visibleRecords.length === 0 && <p className="empty-state">لا توجد سجلات مطابقة.</p>}
+          </div>
+        </section>
+
+        <section className="panel">
+          <div className="panel-title">
+            <div>
+              <h2>{editingId ? 'تعديل سجل الإقامة' : 'إضافة سجل إقامة'}</h2>
+              <p>أدخل البيانات الأساسية التي يحتاجها فريق الإدارة للمتابعة.</p>
+            </div>
+            <CirclePlus size={22} />
+          </div>
+          {formError && <p className="error-banner">{formError}</p>}
+          <form className="goal-form iqama-form" onSubmit={(event) => void submit(event)}>
+            <label>
+              الموظف
+              <select disabled={editingId !== null} required value={draft.employeeId} onChange={(event) => setDraft({ ...draft, employeeId: event.target.value })}>
+                <option value="">اختر الموظف</option>
+                {eligibleEmployees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}
+              </select>
+            </label>
+            <label>
+              رقم الإقامة
+              <input required value={draft.iqamaNumber} onChange={(event) => setDraft({ ...draft, iqamaNumber: event.target.value })} />
+            </label>
+            <label>
+              الجنسية
+              <input value={draft.nationality} onChange={(event) => setDraft({ ...draft, nationality: event.target.value })} />
+            </label>
+            <label>
+              المسمى الوظيفي
+              <input value={draft.jobTitle} onChange={(event) => setDraft({ ...draft, jobTitle: event.target.value })} />
+            </label>
+            <label>
+              تاريخ الإصدار
+              <input type="date" value={draft.issueDate} onChange={(event) => setDraft({ ...draft, issueDate: event.target.value })} />
+            </label>
+            <label>
+              تاريخ الانتهاء
+              <input required type="date" value={draft.expiryDate} onChange={(event) => setDraft({ ...draft, expiryDate: event.target.value })} />
+            </label>
+            <label className="wide-field">
+              ملاحظات التجديد
+              <textarea rows={3} value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} />
+            </label>
+            <div className="form-actions wide-field">
+              <button type="submit">{editingId ? 'حفظ التعديلات' : 'إضافة السجل'}</button>
+              {editingId && <button className="secondary-form-button" onClick={() => { setEditingId(null); setDraft(emptyIqama) }} type="button">إلغاء</button>}
+            </div>
+          </form>
+        </section>
       </section>
     </section>
   )
@@ -1703,6 +1928,16 @@ function getDueInfo(goal: Goal) {
   return { className: 'due-normal', label: `باقي ${days} يوم` }
 }
 
+function getIqamaInfo(expiryDate: string) {
+  const today = startOfDay(new Date())
+  const expiry = startOfDay(new Date(`${expiryDate}T00:00:00`))
+  const days = Math.ceil((expiry.getTime() - today.getTime()) / 86_400_000)
+
+  if (days < 0) return { status: 'expired', days, label: `منتهية منذ ${Math.abs(days)} يوم` }
+  if (days <= 90) return { status: 'expiring', days, label: `تنتهي خلال ${days} يوم` }
+  return { status: 'valid', days, label: 'سارية' }
+}
+
 function startOfDay(date: Date) {
   const copy = new Date(date)
   copy.setHours(0, 0, 0, 0)
@@ -1745,6 +1980,9 @@ function auditLabel(action: string) {
     backup_data: 'نسخة احتياطية',
     restore_data: 'استعادة بيانات',
     reset_data: 'تهيئة البيانات',
+    create_iqama: 'إضافة سجل إقامة',
+    update_iqama: 'تحديث سجل إقامة',
+    delete_iqama: 'حذف سجل إقامة',
   }[action] ?? action
 }
 
