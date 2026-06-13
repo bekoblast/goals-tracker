@@ -1673,6 +1673,10 @@ function IqamaWorkspace({
   const [editingId, setEditingId] = useState<number | null>(null)
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('all')
+  const [employeeFilter, setEmployeeFilter] = useState('all')
+  const [nationalityFilter, setNationalityFilter] = useState('all')
+  const [expiryFrom, setExpiryFrom] = useState('')
+  const [expiryTo, setExpiryTo] = useState('')
   const [formError, setFormError] = useState('')
   const [renewingId, setRenewingId] = useState<number | null>(null)
   const [renewalDate, setRenewalDate] = useState('')
@@ -1680,6 +1684,7 @@ function IqamaWorkspace({
   const [alertDaysDraft, setAlertDaysDraft] = useState(alertDays.join(', '))
   const employeeById = new Map(employees.map((employee) => [employee.id, employee]))
   const eligibleEmployees = employees.filter((employee) => employee.role === 'employee' && employee.active)
+  const nationalities = [...new Set(records.map((record) => record.nationality).filter(Boolean))].sort()
   const metrics = {
     total: records.length,
     valid: records.filter((record) => getIqamaInfo(record.expiryDate).status === 'valid').length,
@@ -1694,7 +1699,12 @@ function IqamaWorkspace({
       `${employee?.name ?? ''} ${record.iqamaNumber} ${record.nationality} ${record.jobTitle}`
         .toLowerCase()
         .includes(term)
-    return matchesSearch && (status === 'all' || getIqamaInfo(record.expiryDate).status === status)
+    const matchesStatus = status === 'all' || getIqamaInfo(record.expiryDate).status === status
+    const matchesEmployee = employeeFilter === 'all' || record.employeeId === employeeFilter
+    const matchesNationality = nationalityFilter === 'all' || record.nationality === nationalityFilter
+    const matchesFrom = !expiryFrom || record.expiryDate >= expiryFrom
+    const matchesTo = !expiryTo || record.expiryDate <= expiryTo
+    return matchesSearch && matchesStatus && matchesEmployee && matchesNationality && matchesFrom && matchesTo
   })
 
   const submit = async (event: FormEvent) => {
@@ -1748,6 +1758,48 @@ function IqamaWorkspace({
     }
   }
 
+  const exportIqamaReport = () => {
+    const rows: Array<Array<string | number>> = [
+      ['تقرير الإقامات'],
+      ['تاريخ التقرير', new Date().toLocaleDateString('ar-SA')],
+      ['عدد السجلات المطابقة', visibleRecords.length],
+      [],
+      [
+        'الموظف',
+        'رقم الإقامة',
+        'الجنسية',
+        'المسمى الوظيفي',
+        'تاريخ الإصدار',
+        'تاريخ الانتهاء',
+        'الحالة',
+        'الأيام المتبقية',
+        'عدد التجديدات',
+        'آخر تجديد',
+        'الملاحظات',
+      ],
+      ...visibleRecords.map((record) => {
+        const info = getIqamaInfo(record.expiryDate)
+        const latestRenewal = record.renewalHistory[0]
+        return [
+          employeeById.get(record.employeeId)?.name ?? record.employeeId,
+          record.iqamaNumber,
+          record.nationality,
+          record.jobTitle,
+          record.issueDate,
+          record.expiryDate,
+          info.label,
+          info.days,
+          record.renewalHistory.length,
+          latestRenewal
+            ? `${latestRenewal.previousExpiryDate} -> ${latestRenewal.newExpiryDate}`
+            : '',
+          record.notes,
+        ]
+      }),
+    ]
+    downloadCsv(`iqama-expiry-report-${new Date().toISOString().slice(0, 10)}.csv`, rows)
+  }
+
   return (
     <section className="workspace hub-workspace">
       <header className="topbar">
@@ -1755,6 +1807,10 @@ function IqamaWorkspace({
           <p className="eyebrow">إدارة بيانات الموظفين</p>
           <h1>متابعة الإقامات</h1>
         </div>
+        <button className="soft-button" onClick={exportIqamaReport} type="button">
+          <Download size={18} />
+          تنزيل تقرير الإقامات
+        </button>
       </header>
 
       <section className="metric-grid" aria-label="ملخص الإقامات">
@@ -1762,6 +1818,79 @@ function IqamaWorkspace({
         <MetricCard icon={<CheckCircle2 />} label="سارية" value={metrics.valid.toString()} />
         <MetricCard icon={<CalendarDays />} label="تنتهي خلال 90 يوما" value={metrics.expiring.toString()} />
         <MetricCard icon={<Bell />} label="منتهية" value={metrics.expired.toString()} />
+      </section>
+
+      <section className="panel report-panel">
+        <div className="panel-title">
+          <div>
+            <h2>تقرير انتهاء الإقامات</h2>
+            <p>صف التقرير حسب الموظف، الجنسية، الحالة، أو نطاق تاريخ الانتهاء.</p>
+          </div>
+          <BarChart3 size={22} />
+        </div>
+        <div className="filters iqama-report-filters">
+          <label>
+            <UserRound size={16} />
+            <select onChange={(event) => setEmployeeFilter(event.target.value)} value={employeeFilter}>
+              <option value="all">كل الموظفين</option>
+              {eligibleEmployees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}
+            </select>
+          </label>
+          <label>
+            <Filter size={16} />
+            <select onChange={(event) => setNationalityFilter(event.target.value)} value={nationalityFilter}>
+              <option value="all">كل الجنسيات</option>
+              {nationalities.map((nationality) => <option key={nationality}>{nationality}</option>)}
+            </select>
+          </label>
+          <label>
+            <Filter size={16} />
+            <select onChange={(event) => setStatus(event.target.value)} value={status}>
+              <option value="all">كل الحالات</option>
+              <option value="valid">سارية</option>
+              <option value="expiring">تنتهي قريبا</option>
+              <option value="expired">منتهية</option>
+            </select>
+          </label>
+          <label className="date-filter">
+            من
+            <input type="date" onChange={(event) => setExpiryFrom(event.target.value)} value={expiryFrom} />
+          </label>
+          <label className="date-filter">
+            إلى
+            <input type="date" onChange={(event) => setExpiryTo(event.target.value)} value={expiryTo} />
+          </label>
+        </div>
+        <div className="report-table-wrap">
+          <table className="report-table iqama-report-table">
+            <thead>
+              <tr>
+                <th>الموظف</th>
+                <th>رقم الإقامة</th>
+                <th>الجنسية</th>
+                <th>تاريخ الانتهاء</th>
+                <th>الحالة</th>
+                <th>التجديدات</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleRecords.map((record) => {
+                const info = getIqamaInfo(record.expiryDate)
+                return (
+                  <tr key={record.id}>
+                    <td><strong>{employeeById.get(record.employeeId)?.name ?? record.employeeId}</strong></td>
+                    <td>{record.iqamaNumber}</td>
+                    <td>{record.nationality || '-'}</td>
+                    <td>{formatDate(record.expiryDate)}</td>
+                    <td><span className={`status-pill iqama-${info.status}`}>{info.label}</span></td>
+                    <td>{record.renewalHistory.length}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+          {visibleRecords.length === 0 && <p className="empty-state">لا توجد سجلات مطابقة للتقرير.</p>}
+        </div>
       </section>
 
       <section className="iqama-content-grid">
@@ -1778,15 +1907,20 @@ function IqamaWorkspace({
               <Search size={17} />
               <input onChange={(event) => setSearch(event.target.value)} placeholder="ابحث بالموظف أو رقم الإقامة" value={search} />
             </label>
-            <label>
-              <Filter size={16} />
-              <select onChange={(event) => setStatus(event.target.value)} value={status}>
-                <option value="all">كل الحالات</option>
-                <option value="valid">سارية</option>
-                <option value="expiring">تنتهي قريبا</option>
-                <option value="expired">منتهية</option>
-              </select>
-            </label>
+            <button
+              className="clear-filter-button"
+              onClick={() => {
+                setSearch('')
+                setStatus('all')
+                setEmployeeFilter('all')
+                setNationalityFilter('all')
+                setExpiryFrom('')
+                setExpiryTo('')
+              }}
+              type="button"
+            >
+              مسح الفلاتر
+            </button>
           </div>
           <div className="iqama-list">
             {visibleRecords.map((record) => {

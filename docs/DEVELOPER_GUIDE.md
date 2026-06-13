@@ -158,6 +158,8 @@ Super Admins configure shared alert thresholds through `settings.iqamaAlertDays`
 
 Each record tracks delivered thresholds to prevent duplicate notifications. Changing or renewing an expiry date resets that alert progression.
 
+The Iqama workspace includes a report table and client-side CSV export. Report filters cover employee, nationality, expiry status, and expiry-date range. The exported CSV includes the current status, remaining days, renewal count, latest renewal, and notes.
+
 ## Quality Checks
 
 Run before pushing:

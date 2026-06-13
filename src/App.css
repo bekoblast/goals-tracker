@@ -532,6 +532,37 @@ h2 {
   grid-template-columns: minmax(0, 1fr) 170px;
 }
 
+.iqama-report-filters {
+  grid-template-columns: repeat(3, minmax(150px, 1fr)) repeat(2, minmax(150px, 0.8fr));
+}
+
+.date-filter {
+  font-weight: 800;
+}
+
+.clear-filter-button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 8px;
+  color: #334155;
+  background: #edf5f9;
+  font: inherit;
+  font-weight: 900;
+}
+
+.clear-filter-button:hover {
+  color: #071923;
+  background: #dff5fc;
+}
+
+.iqama-report-table {
+  min-width: 760px;
+}
+
+.iqama-report-table .status-pill {
+  white-space: nowrap;
+}
+
 .iqama-list {
   display: grid;
   gap: 10px;
@@ -1458,6 +1489,7 @@ h2 {
   .hub-module-grid,
   .hub-summary-grid,
   .iqama-content-grid,
+  .iqama-report-filters,
   .guide-grid,
   .filters,
   .goal-form,
